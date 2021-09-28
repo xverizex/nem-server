@@ -37,10 +37,8 @@ static int parse (char *dt, int *id) {
 	int stringlen = 0;
 	enum json_tokener_error jerr;
 	json_tokener *tok = json_tokener_new ();
-	do {
-		stringlen = strlen (dt);
-		jobj = json_tokener_parse_ex (tok, dt, stringlen);
-	} while ((jerr = json_tokener_get_error (tok)) == json_tokener_continue);
+	stringlen = strlen (dt);
+	jobj = json_tokener_parse_ex (tok, dt, stringlen);
 
 	if (jerr != json_tokener_success) {
 		fprintf (stderr, "Error tok: %s\n", json_tokener_error_desc (jerr));
