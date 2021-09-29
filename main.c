@@ -39,6 +39,7 @@ static int parse (char *dt, int *id) {
 	json_tokener *tok = json_tokener_new ();
 	stringlen = strlen (dt);
 	jobj = json_tokener_parse_ex (tok, dt, stringlen);
+	jerr = json_tokener_get_error (tok);
 
 	if (jerr != json_tokener_success) {
 		fprintf (stderr, "Error tok: %s\n", json_tokener_error_desc (jerr));
@@ -309,7 +310,7 @@ static void loop_handler (const int sock) {
 	while (FOREVER) {
 		struct sockaddr_in cl;
 		int ret, client;
-		socklen_t sl;
+		socklen_t sl = sizeof (cl);
 		ret = client = accept (sock, (struct sockaddr *) &cl, &sl);
 		if (ret == -1) {
 			perror ("accept");
