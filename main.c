@@ -142,13 +142,11 @@ static void *handler_clients_cb (void *data) {
 				}
 				close (dc->client);
 				free (dc);
-				printf ("disconnected\n");
 				continue;
 			}
 			dt[size] = 0;
 			int ret;
 			int id = 0;
-			printf ("%s\n", dt);
 			if ((ret = parse (dt, &id)) == -1) {
 				json_object *buf_false = get_json_buf_false ();
 				const char *buf = json_object_to_json_string_ext (buf_false, JSON_C_TO_STRING_PRETTY);
@@ -278,9 +276,7 @@ static void create_epoll_and_thread (const int sock) {
 
 static void init_ssl (struct data_client *dc, const int sock) {
 	dc->ssl = SSL_new (dc->ctx);
-	printf ("ssl: %p\n", dc->ssl);
 	int ret = SSL_set_fd (dc->ssl, sock);
-	printf ("ret ssl set fd: %d\n", ret);
 }
 
 static void clear_ssl_dc (struct data_client *dc) {
@@ -346,7 +342,6 @@ static void loop_handler (const int sock) {
 				clear_ssl_dc (dc);
 				close (client);
 				free (dc);
-				printf ("cor\n");
 				continue;
 			}
 			FD_ISSET (0, &rfds);
@@ -359,7 +354,6 @@ static void loop_handler (const int sock) {
 				continue;
 			}
 		} else {
-			printf ("no data\n");
 			clear_ssl_dc (dc);
 			close (client);
 			free (dc);
