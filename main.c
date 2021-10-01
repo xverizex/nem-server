@@ -383,6 +383,7 @@ void handler_signal (int sig) {
 
 int main (int argc, char **argv) {
 	signal (SIGPIPE, SIG_IGN);
+
 	init_mysql ();
 	init_ssl_library ();
 	int sock = init_socket ();
