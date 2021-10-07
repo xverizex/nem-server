@@ -6,6 +6,9 @@
 4. [Handshake](#Handshake)
 5. [Message](#Message)
 6. [Feed](#Feed)
+7. [StatusOnline](#StatusOnline)
+8. [HandshakeKey](#HandshakeKey)
+9. [HandshakeNotice](#HandshakeNotice)
 
 ## <a name="Register"></a> Register
 ```
@@ -123,5 +126,30 @@ if the server is store messages then the answer is this:
 	"from": "nemesis",
 	"to": "laptop",
 	"data": "fjaejf89asefa89seyf89asyef98ayhsef"
+}
+```
+a server also can send this data:
+## <a name="StatusOnline"></a> StatusOnline
+```
+{
+	"type": "status_online",
+	"status", 1,
+	"name", "laptop"
+}
+```
+## <a name="HandshakeKey"></a> HandshakeKey
+```
+{
+	"type": "handshake_key",
+	"from": "nemesis",
+	"key": "fafasjfsa9fasf98sfyha9s8hf98ashf98hasf"
+}
+```
+## <a name="HandshakeNotice"></a> HandshakeNotice
+```
+{
+	"type": "handshake_notice",
+	"from": "laptop",
+	"status": 1
 }
 ```
