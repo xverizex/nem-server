@@ -1,11 +1,11 @@
 # nem server api
 
-1. [Register] (#Register)
-2. [Login] (#Login)
-3. [GetList] (#GetList)
-4. [Handshake] (#Handshake)
-5. [Message] (#Message)
-6. [Feed] (#Feed)
+1. [Register](#Register)
+2. [Login](#Login)
+3. [GetList](#GetList)
+4. [Handshake](#Handshake)
+5. [Message](#Message)
+6. [Feed](#Feed)
 
 ## <a name="Register"></a> Register
 ```
