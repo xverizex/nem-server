@@ -1,4 +1,3 @@
-drop table if exists acc;
 drop table if exists online;
 drop table if exists waitness;
 drop table if exists handshake;
