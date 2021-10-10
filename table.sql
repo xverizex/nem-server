@@ -1,6 +1,7 @@
 drop table if exists online;
 drop table if exists waitness;
 drop table if exists handshake;
+drop table if exists storage;
 
 create table if not exists acc (
 	id int not null primary key auto_increment,
@@ -28,3 +29,11 @@ create table if not exists handshake (
 	to_name char(16) not null,
 	key_pem TEXT not null
 );
+
+create table if not exists storage (
+	id int not null primary key auto_increment,
+	name_from char(16) not null,
+	name_to char(16) not null,
+	filename char(255) not null,
+	data TEXT not null
+	)

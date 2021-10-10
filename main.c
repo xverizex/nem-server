@@ -101,6 +101,16 @@ static int parse (char *dt, int *id) {
 	}
 	if (!strncmp (type, "feed", 5)) return STATUS_FEED;
 
+	if (!strncmp (type, "file_add", 9)) {
+		int ret;
+		if ((ret = mysql_check_file_add (jobj)) == 0) {
+			json_object_put (jobj);
+			return -1;
+		}
+		json_object_put (jobj);
+		return ret;
+	}
+
 	return -1;
 }
 
@@ -108,6 +118,8 @@ static json_object *get_json_buf_ok () {
 	json_object *jo = json_object_new_object ();
 	json_object *jstatus = json_object_new_string ("ok");
 	json_object_object_add (jo, "status", jstatus);
+	json_object *jtype = json_object_new_string ("result");
+	json_object_object_add (jo, "type", jtype);
 	return jo;
 }
 
@@ -115,6 +127,8 @@ static json_object *get_json_buf_false () {
 	json_object *jo = json_object_new_object ();
 	json_object *jstatus = json_object_new_string ("false");
 	json_object_object_add (jo, "status", jstatus);
+	json_object *jtype = json_object_new_string ("result");
+	json_object_object_add (jo, "type", jtype);
 	return jo;
 }
 
@@ -165,7 +179,7 @@ static void *handler_clients_cb (void *data) {
 				}
 				close (dc->client);
 				free (dc);
-
+				continue;
 			}
 			switch (ret) {
 				case STATUS_REGISTER: 
@@ -229,6 +243,13 @@ static void *handler_clients_cb (void *data) {
 						char ptr[64];
 						snprintf (ptr, 64, "%lld", dc->ssl);
 						mysql_feed (ptr);
+					}
+					break;
+				case STATUS_FILE_ADD:
+					{
+						char ptr[64];
+						snprintf (ptr, 64, "%lld", dc->ssl);
+						mysql_file_add (ptr, dt);
 					}
 					break;
 			}

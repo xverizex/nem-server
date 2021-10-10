@@ -209,7 +209,90 @@ static char *get_ptr_from_name (const char *name) {
 	return NULL;
 }
 
+static int mysql_add_file_to_table (const char *from, 
+		const char *to, 
+		const char *filename, 
+		const int is_full,
+		const char *data)
+{
+	int len;
+	int ll;
+	len = strlen (to);
+	len *= 2;
+	char *cto = malloc (len + 1);
+	if (!cto) return -1;
+	ll = mysql_escape_string (cto, to, strlen (to));
+	cto[ll] = 0;
+	len = strlen (filename);
+	len *= 2;
+	char *cfilename = malloc (len + 1);
+	if (!cfilename) { free (cto); return -1; }
+	ll = mysql_escape_string (cfilename, filename, strlen (filename));
+	cfilename[ll] = 0;
+	len = strlen (data);
+	len *= 2;
+	char *cdata = malloc (len + 1);
+	if (!cdata) {
+		free (cto);
+		free (cfilename);
+		return -1;
+	}
+	ll = mysql_escape_string (cdata, data, strlen (data));
+	cdata[ll] = 0;
+	
+	char query[5000];
+	snprintf (query, 5000, "select * from storage where name_from = '%s' and name_to = '%s' and filename = '%s';",
+			from,
+			cto,
+			cfilename
+		 );
+	mysql_query (mysql, query);
+	MYSQL_RES *res = mysql_store_result (mysql);
+	unsigned long long int num_fields = mysql_num_rows (res);
+	mysql_free_result (res);
+	int ret = 0;
+	if (num_fields > 0) {
+		ret = -1;
+	} else {
+		snprintf (query, 5000, "insert into storage (name_from, name_to, is_full, filename, data) "
+				"values ('%s', '%s', %d, '%s', '%s');",
+				from,
+				cto,
+				is_full,
+				cfilename,
+				cdata);
+		mysql_query (mysql, query);
+		ret = 0;
+	}
+
+	free (cdata);
+	free (cfilename);
+	free (cto);
+
+	return ret;
+}
+
 static char *get_our_name (const char *ptr);
+
+void mysql_file_add (const char *ptr, const char *dt) {
+	json_object *jb = json_tokener_parse (dt);
+	json_object *jto = json_object_object_get (jb, "to");
+	json_object *jdata = json_object_object_get (jb, "data");
+	json_object *jfilename = json_object_object_get (jb, "filename");
+	json_object *jisfull = json_object_object_get (jb, "is_full");
+
+	const char *to_name = json_object_get_string (jto);
+	const char *data = json_object_get_string (jdata);
+	const char *filename = json_object_get_string (jfilename);
+	int is_full = json_object_get_int (jisfull);
+
+	char *our_name = get_our_name (ptr);
+
+	int res = mysql_add_file_to_table (our_name, to_name, filename, is_full, data);
+
+	free (our_name);
+	json_object_put (jb);
+}
 
 void mysql_send_message (char *ptr, char *dt) {
 	json_object *jb = json_tokener_parse (dt);
@@ -240,6 +323,34 @@ void mysql_send_message (char *ptr, char *dt) {
 
 	free (our_name);
 	json_object_put (jb);
+}
+
+int mysql_check_file_add (json_object *jb) {
+	const char *dt = json_object_to_json_string_ext (jb, JSON_C_TO_STRING_PRETTY);
+	printf ("%s\n", dt);
+	json_object *jto = json_object_object_get (jb, "to");
+	json_object *jfilename = json_object_object_get (jb, "filename");
+	json_object *jdata = json_object_object_get (jb, "data");
+	json_object *jis_full = json_object_object_get (jb, "is_full");
+	if (!jto || !jfilename || !jdata ||! jis_full) {
+		return 0;
+	}
+
+	const char *to = json_object_get_string (jto);
+	const char *filename = json_object_get_string (jfilename);
+	const char *data = json_object_get_string (jdata);
+
+	if (strlen (to) > 16) {
+		return 0;
+	}
+	if (strlen (filename) > 256) {
+		return 0;
+	}
+	if (strlen (data) > 516) {
+		return 0;
+	}
+
+	return STATUS_FILE_ADD;
 }
 
 int mysql_check_message (json_object *jb) {
