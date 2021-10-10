@@ -212,7 +212,6 @@ static char *get_ptr_from_name (const char *name) {
 static int mysql_add_file_to_table (const char *from, 
 		const char *to, 
 		const char *filename, 
-		const int is_full,
 		const char *data)
 {
 	int len;
@@ -254,8 +253,8 @@ static int mysql_add_file_to_table (const char *from,
 	if (num_fields > 0) {
 		ret = -1;
 	} else {
-		snprintf (query, 5000, "insert into storage (name_from, name_to, is_full, filename, data) "
-				"values ('%s', '%s', %d, '%s', '%s');",
+		snprintf (query, 5000, "insert into storage (name_from, name_to, filename, data) "
+				"values ('%s', '%s', '%s', '%s');",
 				from,
 				cto,
 				is_full,
@@ -279,16 +278,14 @@ void mysql_file_add (const char *ptr, const char *dt) {
 	json_object *jto = json_object_object_get (jb, "to");
 	json_object *jdata = json_object_object_get (jb, "data");
 	json_object *jfilename = json_object_object_get (jb, "filename");
-	json_object *jisfull = json_object_object_get (jb, "is_full");
 
 	const char *to_name = json_object_get_string (jto);
 	const char *data = json_object_get_string (jdata);
 	const char *filename = json_object_get_string (jfilename);
-	int is_full = json_object_get_int (jisfull);
 
 	char *our_name = get_our_name (ptr);
 
-	int res = mysql_add_file_to_table (our_name, to_name, filename, is_full, data);
+	int res = mysql_add_file_to_table (our_name, to_name, filename, data);
 
 	free (our_name);
 	json_object_put (jb);
@@ -331,8 +328,7 @@ int mysql_check_file_add (json_object *jb) {
 	json_object *jto = json_object_object_get (jb, "to");
 	json_object *jfilename = json_object_object_get (jb, "filename");
 	json_object *jdata = json_object_object_get (jb, "data");
-	json_object *jis_full = json_object_object_get (jb, "is_full");
-	if (!jto || !jfilename || !jdata ||! jis_full) {
+	if (!jto || !jfilename || !jdata) {
 		return 0;
 	}
 
