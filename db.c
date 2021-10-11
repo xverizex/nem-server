@@ -257,7 +257,6 @@ static int mysql_add_file_to_table (const char *from,
 				"values ('%s', '%s', '%s', '%s');",
 				from,
 				cto,
-				is_full,
 				cfilename,
 				cdata);
 		mysql_query (mysql, query);
@@ -271,8 +270,83 @@ static int mysql_add_file_to_table (const char *from,
 	return ret;
 }
 
+static json_object *json_build_storage_message (const char *from, 
+		const char *filename,
+		const char *data)
+{
+	json_object *obj = json_object_new_object ();
+	json_object *jtype = json_object_new_string ("storage_files");
+	json_object *jfrom = json_object_new_string (from);
+	json_object *jfilename = json_object_new_string (filename);
+	json_object *jdata = json_object_new_string (data);
+	json_object_object_add (obj, "type", jtype);
+	json_object_object_add (obj, "from", jfrom);
+	json_object_object_add (obj, "filename", jfilename);
+	json_object_object_add (obj, "data", jdata);
+	return obj;
+}
+
+static int mysql_get_list_files (const char *to, 
+		const char *from,
+		const char *ptr)
+{
+	int len;
+	int ll;
+	len = strlen (to);
+	len *= 2;
+	char *cto = malloc (len + 1);
+	if (!cto) return -1;
+	ll = mysql_escape_string (cto, to, strlen (to));
+	cto[ll] = 0;
+	
+	char query[5000];
+	snprintf (query, 5000, "select * from storage where name_from = '%s' and name_to = '%s';",
+			from,
+			cto
+		 );
+	mysql_query (mysql, query);
+	MYSQL_RES *res = mysql_store_result (mysql);
+	unsigned long long int num_fields = mysql_num_rows (res);
+	int ret = 0;
+	if (num_fields > 0) {
+		const int ID = 0;
+		const int FROM = 1;
+		const int TO = 2;
+		const int FILENAME = 3;
+		const int DATA = 4;
+		SSL *ssl = (SSL *) atol (ptr);
+		for (int i = 0; i < num_fields; i++)
+		{
+			MYSQL_ROW row = mysql_fetch_row (res);
+			json_object *jb = json_build_storage_message (row[FROM], row[FILENAME], row[DATA]);
+			const char *data = json_object_to_json_string_ext (jb, JSON_C_TO_STRING_PRETTY);
+			SSL_write (ssl, data, strlen (data));
+			json_object_put (jb);
+		}
+	}
+	
+	mysql_free_result (res);
+
+	free (cto);
+
+	return ret;
+}
+
 static char *get_our_name (const char *ptr);
 
+void mysql_storage_files (const char *ptr, const char *dt) {
+	json_object *jb = json_tokener_parse (dt);
+	json_object *jfrom = json_object_object_get (jb, "from");
+
+	const char *from = json_object_get_string (jfrom);
+
+	char *our_name = get_our_name (ptr);
+
+	int res = mysql_get_list_files (our_name, from, ptr);
+
+	free (our_name);
+	json_object_put (jb);
+}
 void mysql_file_add (const char *ptr, const char *dt) {
 	json_object *jb = json_tokener_parse (dt);
 	json_object *jto = json_object_object_get (jb, "to");
@@ -323,8 +397,6 @@ void mysql_send_message (char *ptr, char *dt) {
 }
 
 int mysql_check_file_add (json_object *jb) {
-	const char *dt = json_object_to_json_string_ext (jb, JSON_C_TO_STRING_PRETTY);
-	printf ("%s\n", dt);
 	json_object *jto = json_object_object_get (jb, "to");
 	json_object *jfilename = json_object_object_get (jb, "filename");
 	json_object *jdata = json_object_object_get (jb, "data");
@@ -347,6 +419,21 @@ int mysql_check_file_add (json_object *jb) {
 	}
 
 	return STATUS_FILE_ADD;
+}
+
+int mysql_check_storage_files (json_object *jb) {
+	json_object *jfrom = json_object_object_get (jb, "from");
+	if (!jfrom) {
+		return 0;
+	}
+
+	const char *from = json_object_get_string (jfrom);
+
+	if (strlen (from) > 16) {
+		return 0;
+	}
+
+	return STATUS_STORAGE_FILES;
 }
 
 int mysql_check_message (json_object *jb) {
