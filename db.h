@@ -11,6 +11,7 @@
 #define STATUS_FEED               7
 #define STATUS_FILE_ADD           8
 #define STATUS_STORAGE_FILES      9
+#define STATUS_GET_FILE          10
 void init_mysql ();
 int mysql_registration_server (json_object *j);
 void set_to_online_table (const char *ssl_ptr, const int id);
@@ -30,3 +31,5 @@ int mysql_check_file_add (json_object *j);
 void mysql_file_add (const char *ptr, const char *dt);
 int mysql_check_storage_files (json_object *j);
 void mysql_storage_files (const char *ptr, const char *dt);
+int mysql_check_get_file (json_object *j);
+void mysql_get_file (const char *ptr, const char *dt);

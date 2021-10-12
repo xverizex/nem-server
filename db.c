@@ -423,6 +423,110 @@ void mysql_file_add (const char *ptr, const char *dt) {
 	json_object_put (jb);
 }
 
+struct dtf {
+	SSL *ssl;
+	char *data;
+	char *filename;
+	char *from;
+	char *ckey;
+	char *ivec;
+	size_t pos;
+	size_t size;
+};
+
+static void build_and_send_json_file (struct dtf *dtf) {
+	json_object *jb = json_object_new_object ();
+	json_object *jtype = json_object_new_string ("getting_file");
+	json_object *jfrom = json_object_new_string (dtf->from);
+	json_object *jpos = json_object_new_int64 (dtf->pos);
+	json_object *jsize = json_object_new_int64 (dtf->size);
+	json_object *jfilename = json_object_new_string (dtf->filename);
+	json_object *jckey = json_object_new_string (dtf->ckey);
+	json_object *jivec = json_object_new_string (dtf->ivec);
+	json_object_object_add (jb, "type", jtype);
+	json_object_object_add (jb, "from", jfrom);
+	json_object_object_add (jb, "filename", jfilename);
+	json_object_object_add (jb, "pos", jpos);
+	json_object_object_add (jb, "size", jsize);
+	json_object_object_add (jb, "ckey", jckey);
+	json_object_object_add (jb, "ivec", jivec);
+	char data[17];
+	strncpy (data, &dtf->data[dtf->pos], 16);
+	data[16] = 0;
+	json_object *jdata = json_object_new_string (data);
+	json_object_object_add (jb, "data", jdata);
+
+	const char *dt = json_object_to_json_string_ext (jb, JSON_C_TO_STRING_PRETTY);
+	SSL_write (dtf->ssl, dt, strlen (dt));
+	json_object_put (jb);
+}
+
+static void *process_sending_file (void *data) {
+	struct dtf *dtf = (struct dtf *) data;
+
+	while (dtf->pos < dtf->size) {
+		build_and_send_json_file (dtf);
+		dtf->pos += 16;
+	}
+	free (dtf->data);
+	free (dtf->filename);
+	free (dtf->from);
+	free (dtf);
+	return NULL;
+}
+
+void mysql_get_file (const char *ptr, const char *dt) {
+	json_object *jb = json_tokener_parse (dt);
+	json_object *jfrom = json_object_object_get (jb, "from");
+	json_object *jfilename = json_object_object_get (jb, "filename");
+	const char *to_name = json_object_get_string (jfrom);
+	const char *filename = json_object_get_string (jfilename);
+	char *our_name = get_our_name (ptr);
+
+	SSL *ssl = (SSL *) atol (ptr);
+
+	int len;
+	int ll;
+	len = strlen (to_name);
+	len *= 2;
+	char *cfrom = malloc (len + 1);
+	if (!cfrom) return;
+	ll = mysql_escape_string (cfrom, to_name, strlen (to_name));
+	cfrom[ll] = 0;
+	char *cfilename = malloc (len + 1);
+	if (!cfilename) return;
+	ll = mysql_escape_string (cfilename, filename, strlen (filename));
+	cfilename[ll] = 0;
+	
+	char query[5000];
+	snprintf (query, 5000, "select data,ckey,ivec from storage where name_from = '%s' and name_to = '%s' and filename = '%s';",
+			cfrom,
+			our_name,
+			cfilename
+		 );
+	mysql_query (mysql, query);
+	MYSQL_RES *res = mysql_store_result (mysql);
+	unsigned long long int num_fields = mysql_num_rows (res);
+
+	if (num_fields) {
+		MYSQL_ROW row = mysql_fetch_row (res);
+		struct dtf *dtf = calloc (1, sizeof (struct dtf));
+		dtf->ssl = ssl;
+		dtf->pos = 0L;
+		dtf->size = strlen (row[0]);
+		dtf->data = strdup (row[0]);
+		dtf->filename = strdup (cfilename);
+		dtf->from = strdup (cfrom);
+		dtf->ckey = strdup (row[1]);
+		dtf->ivec = strdup (row[2]);
+		pthread_t t;
+		pthread_create (&t, NULL, process_sending_file, dtf);
+	}
+
+	mysql_free_result (res);
+	free (our_name);
+	json_object_put (jb);
+}
 void mysql_send_message (char *ptr, char *dt) {
 	json_object *jb = json_tokener_parse (dt);
 	json_object *jto = json_object_object_get (jb, "to");
@@ -454,6 +558,25 @@ void mysql_send_message (char *ptr, char *dt) {
 	json_object_put (jb);
 }
 
+int mysql_check_get_file (json_object *jb) {
+	json_object *jto = json_object_object_get (jb, "from");
+	json_object *jfilename = json_object_object_get (jb, "filename");
+	if (!jto || !jfilename) {
+		return 0;
+	}
+
+	const char *to = json_object_get_string (jto);
+	const char *filename = json_object_get_string (jfilename);
+
+	if (strlen (to) > 16) {
+		return 0;
+	}
+	if (strlen (filename) > 256) {
+		return 0;
+	}
+
+	return STATUS_GET_FILE;
+}
 int mysql_check_file_add (json_object *jb) {
 	json_object *jto = json_object_object_get (jb, "to");
 	json_object *jfilename = json_object_object_get (jb, "filename");

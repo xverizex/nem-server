@@ -119,6 +119,15 @@ static int parse (char *dt, int *id) {
 		json_object_put (jobj);
 		return ret;
 	}
+	if (!strncmp (type, "get_file", 9)) {
+		int ret;
+		if ((ret = mysql_check_get_file (jobj)) == 0) {
+			json_object_put (jobj);
+			return -1;
+		}
+		json_object_put (jobj);
+		return ret;
+	}
 
 	return -1;
 }
@@ -266,6 +275,13 @@ static void *handler_clients_cb (void *data) {
 						char ptr[64];
 						snprintf (ptr, 64, "%lld", dc->ssl);
 						mysql_storage_files (ptr, dt);
+					}
+					break;
+				case STATUS_GET_FILE:
+					{
+						char ptr[64];
+						snprintf (ptr, 64, "%lld", dc->ssl);
+						mysql_get_file (ptr, dt);
 					}
 					break;
 			}
