@@ -212,7 +212,10 @@ static char *get_ptr_from_name (const char *name) {
 static int mysql_add_file_to_table (const char *from, 
 		const char *to, 
 		const char *filename, 
-		const char *data)
+		const char *data,
+		const char *ckey,
+		const char *ivec,
+		const int is_start)
 {
 	int len;
 	int ll;
@@ -238,6 +241,29 @@ static int mysql_add_file_to_table (const char *from,
 	}
 	ll = mysql_escape_string (cdata, data, strlen (data));
 	cdata[ll] = 0;
+	len = strlen (ckey);
+	len *= 2;
+	char *cckey = malloc (len + 1);
+	if (!cckey) {
+		free (cto);
+		free (cfilename);
+		free (cdata);
+		return -1;
+	}
+	ll = mysql_escape_string (cckey, ckey, strlen (ckey));
+	cckey[ll] = 0;
+	len = strlen (ivec);
+	len *= 2;
+	char *civec = malloc (len + 1);
+	if (!civec) {
+		free (cto);
+		free (cfilename);
+		free (cdata);
+		free (cckey);
+		return -1;
+	}
+	ll = mysql_escape_string (civec, ivec, strlen (ivec));
+	civec[ll] = 0;
 	
 	char query[5000];
 	snprintf (query, 5000, "select * from storage where name_from = '%s' and name_to = '%s' and filename = '%s';",
@@ -252,13 +278,26 @@ static int mysql_add_file_to_table (const char *from,
 	int ret = 0;
 	if (num_fields > 0) {
 		ret = -1;
+		if (is_start) {
+			ret = 0;
+			snprintf (query, 5000, "update storage set data=concat(data,'%s') where name_from = '%s' and "
+					"name_to = '%s' and filename = '%s';",
+					cdata,
+					from,
+					cto,
+					cfilename
+				 );
+			mysql_query (mysql, query);
+		}
 	} else {
-		snprintf (query, 5000, "insert into storage (name_from, name_to, filename, data) "
-				"values ('%s', '%s', '%s', '%s');",
+		snprintf (query, 5000, "insert into storage (name_from, name_to, filename, data, ckey, ivec) "
+				"values ('%s', '%s', '%s', '%s', '%s', '%s');",
 				from,
 				cto,
 				cfilename,
-				cdata);
+				cdata,
+				cckey,
+				civec);
 		mysql_query (mysql, query);
 		ret = 0;
 	}
@@ -266,23 +305,32 @@ static int mysql_add_file_to_table (const char *from,
 	free (cdata);
 	free (cfilename);
 	free (cto);
+	free (cckey);
+	free (civec);
 
 	return ret;
 }
 
 static json_object *json_build_storage_message (const char *from, 
 		const char *filename,
-		const char *data)
+		const char *data,
+		const char *ckey,
+		const char *ivec,
+		size_t pos)
 {
+	char dt[16];
+	snprintf (dt, 16, "%s", &data[pos]);
 	json_object *obj = json_object_new_object ();
 	json_object *jtype = json_object_new_string ("storage_files");
 	json_object *jfrom = json_object_new_string (from);
 	json_object *jfilename = json_object_new_string (filename);
-	json_object *jdata = json_object_new_string (data);
+	json_object *jckey = json_object_new_string (ckey);
+	json_object *jivec = json_object_new_string (ivec);
 	json_object_object_add (obj, "type", jtype);
 	json_object_object_add (obj, "from", jfrom);
 	json_object_object_add (obj, "filename", jfilename);
-	json_object_object_add (obj, "data", jdata);
+	json_object_object_add (obj, "ckey", jckey);
+	json_object_object_add (obj, "ivec", jivec);
 	return obj;
 }
 
@@ -310,18 +358,22 @@ static int mysql_get_list_files (const char *to,
 	int ret = 0;
 	if (num_fields > 0) {
 		const int ID = 0;
-		const int FROM = 1;
-		const int TO = 2;
-		const int FILENAME = 3;
-		const int DATA = 4;
+		const int CKEY = 1;
+		const int IVEC = 2;
+		const int FROM = 3;
+		const int TO = 4;
+		const int FILENAME = 5;
+		const int DATA = 6;
 		SSL *ssl = (SSL *) atol (ptr);
+		size_t pos = 0;
 		for (int i = 0; i < num_fields; i++)
 		{
 			MYSQL_ROW row = mysql_fetch_row (res);
-			json_object *jb = json_build_storage_message (row[FROM], row[FILENAME], row[DATA]);
+			json_object *jb = json_build_storage_message (row[FROM], row[FILENAME], row[DATA], row[CKEY], row[IVEC], pos);
 			const char *data = json_object_to_json_string_ext (jb, JSON_C_TO_STRING_PRETTY);
 			SSL_write (ssl, data, strlen (data));
 			json_object_put (jb);
+			pos += 16;
 		}
 	}
 	
@@ -352,14 +404,20 @@ void mysql_file_add (const char *ptr, const char *dt) {
 	json_object *jto = json_object_object_get (jb, "to");
 	json_object *jdata = json_object_object_get (jb, "data");
 	json_object *jfilename = json_object_object_get (jb, "filename");
+	json_object *jis_start = json_object_object_get (jb, "is_start");
+	json_object *jckey = json_object_object_get (jb, "ckey");
+	json_object *jivec = json_object_object_get (jb, "ivec");
 
 	const char *to_name = json_object_get_string (jto);
 	const char *data = json_object_get_string (jdata);
 	const char *filename = json_object_get_string (jfilename);
+	const char *ckey = json_object_get_string (jckey);
+	const char *ivec = json_object_get_string (jivec);
+	const int is_start = json_object_get_int (jis_start);
 
 	char *our_name = get_our_name (ptr);
 
-	int res = mysql_add_file_to_table (our_name, to_name, filename, data);
+	int res = mysql_add_file_to_table (our_name, to_name, filename, data, ckey, ivec, is_start);
 
 	free (our_name);
 	json_object_put (jb);
@@ -400,7 +458,10 @@ int mysql_check_file_add (json_object *jb) {
 	json_object *jto = json_object_object_get (jb, "to");
 	json_object *jfilename = json_object_object_get (jb, "filename");
 	json_object *jdata = json_object_object_get (jb, "data");
-	if (!jto || !jfilename || !jdata) {
+	json_object *jckey = json_object_object_get (jb, "ckey");
+	json_object *jivec = json_object_object_get (jb, "ivec");
+	json_object *jis_start = json_object_object_get (jb, "is_start");
+	if (!jto || !jfilename || !jdata || !jckey || !jivec || !jis_start) {
 		return 0;
 	}
 
