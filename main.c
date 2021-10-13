@@ -178,7 +178,6 @@ static void *handler_clients_cb (void *data) {
 				continue;
 			}
 			dt[size] = 0;
-			printf ("%s\n", dt);
 			int ret;
 			int id = 0;
 			if ((ret = parse (dt, &id)) == -1) {

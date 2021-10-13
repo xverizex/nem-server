@@ -279,7 +279,6 @@ static int mysql_add_file_to_table (const char *from,
 	if (num_fields > 0) {
 		ret = -1;
 		if (is_start) {
-			printf ("udate\n");
 			ret = 0;
 			snprintf (query, 5000, "update storage set data=concat(data,'%s') where name_from = '%s' and "
 					"name_to = '%s' and filename = '%s';",
@@ -291,7 +290,6 @@ static int mysql_add_file_to_table (const char *from,
 			mysql_query (mysql, query);
 		}
 	} else {
-		printf ("insert\n");
 		snprintf (query, 5000, "insert into storage (name_from, name_to, filename, data, ckey, ivec) "
 				"values ('%s', '%s', '%s', '%s', '%s', '%s');",
 				from,
@@ -463,8 +461,6 @@ static void build_and_send_json_file (struct dtf *dtf, int size) {
 	json_object_object_add (jb, "data", jdata);
 
 	const char *dt = json_object_to_json_string_ext (jb, JSON_C_TO_STRING_PRETTY);
-	printf ("send: %s\n", dt);
-	printf ("len: %d\n", strlen (dt));
 	SSL_write (dtf->ssl, dt, strlen (dt));
 	json_object_put (jb);
 	free (data);
