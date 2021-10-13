@@ -19,7 +19,7 @@
 
 #define EPOLL_SIZE         1024
 #define FOREVER            1
-#define DT_SIZE            1024 * 1024 * 30
+#define DT_SIZE            4096
 
 static int ep;
 static struct epoll_event ev, events[EPOLL_SIZE];
@@ -162,6 +162,7 @@ static void *handler_clients_cb (void *data) {
 		for (int i = 0; i < nfds; i++) {
 			struct data_client *dc = events[i].data.ptr;
 			int size = SSL_read (dc->ssl, dt, DT_SIZE);
+			printf ("readed: %d\n", size);
 			if (size <= 0) {
 				char ptr[64];
 				snprintf (ptr, 64, "%lld", dc->ssl);
@@ -177,9 +178,11 @@ static void *handler_clients_cb (void *data) {
 				continue;
 			}
 			dt[size] = 0;
+			printf ("%s\n", dt);
 			int ret;
 			int id = 0;
 			if ((ret = parse (dt, &id)) == -1) {
+				printf ("error parse\n");
 				json_object *buf_false = get_json_buf_false ();
 				const char *buf = json_object_to_json_string_ext (buf_false, JSON_C_TO_STRING_PRETTY);
 				SSL_write (dc->ssl, buf, strlen (buf));
@@ -199,6 +202,7 @@ static void *handler_clients_cb (void *data) {
 				free (dc);
 				continue;
 			}
+			printf ("status: %d\n", ret);
 			switch (ret) {
 				case STATUS_REGISTER: 
 				case STATUS_LOGIN:

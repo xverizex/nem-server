@@ -279,6 +279,7 @@ static int mysql_add_file_to_table (const char *from,
 	if (num_fields > 0) {
 		ret = -1;
 		if (is_start) {
+			printf ("udate\n");
 			ret = 0;
 			snprintf (query, 5000, "update storage set data=concat(data,'%s') where name_from = '%s' and "
 					"name_to = '%s' and filename = '%s';",
@@ -290,6 +291,7 @@ static int mysql_add_file_to_table (const char *from,
 			mysql_query (mysql, query);
 		}
 	} else {
+		printf ("insert\n");
 		snprintf (query, 5000, "insert into storage (name_from, name_to, filename, data, ckey, ivec) "
 				"values ('%s', '%s', '%s', '%s', '%s', '%s');",
 				from,
@@ -400,6 +402,7 @@ void mysql_storage_files (const char *ptr, const char *dt) {
 	json_object_put (jb);
 }
 void mysql_file_add (const char *ptr, const char *dt) {
+	printf ("mysql_file_add\n");
 	json_object *jb = json_tokener_parse (dt);
 	json_object *jto = json_object_object_get (jb, "to");
 	json_object *jdata = json_object_object_get (jb, "data");
@@ -434,7 +437,7 @@ struct dtf {
 	size_t size;
 };
 
-static void build_and_send_json_file (struct dtf *dtf) {
+static void build_and_send_json_file (struct dtf *dtf, int size) {
 	json_object *jb = json_object_new_object ();
 	json_object *jtype = json_object_new_string ("getting_file");
 	json_object *jfrom = json_object_new_string (dtf->from);
@@ -450,23 +453,29 @@ static void build_and_send_json_file (struct dtf *dtf) {
 	json_object_object_add (jb, "size", jsize);
 	json_object_object_add (jb, "ckey", jckey);
 	json_object_object_add (jb, "ivec", jivec);
-	char data[17];
-	strncpy (data, &dtf->data[dtf->pos], 16);
-	data[16] = 0;
+	char *data = malloc (size + 1);
+	if ((dtf->pos + size) > dtf->size) {
+		size = size - (dtf->pos + size - dtf->size);
+	}
+	strncpy (data, &dtf->data[dtf->pos], size);
+	data[size] = 0;
 	json_object *jdata = json_object_new_string (data);
 	json_object_object_add (jb, "data", jdata);
 
 	const char *dt = json_object_to_json_string_ext (jb, JSON_C_TO_STRING_PRETTY);
+	printf ("send: %s\n", dt);
+	printf ("len: %d\n", strlen (dt));
 	SSL_write (dtf->ssl, dt, strlen (dt));
 	json_object_put (jb);
+	free (data);
 }
 
 static void *process_sending_file (void *data) {
 	struct dtf *dtf = (struct dtf *) data;
 
 	while (dtf->pos < dtf->size) {
-		build_and_send_json_file (dtf);
-		dtf->pos += 16;
+		build_and_send_json_file (dtf, 16 * 160);
+		dtf->pos += 16 * 160;
 	}
 	free (dtf->data);
 	free (dtf->filename);
@@ -596,9 +605,6 @@ int mysql_check_file_add (json_object *jb) {
 		return 0;
 	}
 	if (strlen (filename) > 256) {
-		return 0;
-	}
-	if (strlen (data) > 516) {
 		return 0;
 	}
 
