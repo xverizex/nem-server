@@ -26,7 +26,7 @@ static int get_status_by_name (const char *name) {
 	return 0;
 }
 
-json_object *mysql_get_list_users (const char *ptr) {
+void mysql_get_list_users (const char *ptr) {
 	const int NAME = 2;
 	char *name;
 	char query[512];
@@ -50,30 +50,30 @@ json_object *mysql_get_list_users (const char *ptr) {
 	res = mysql_store_result (mysql);
 	num_fields = mysql_num_rows (res);
 
-	json_object *jb = json_object_new_object ();
-	json_object *jtype = json_object_new_string ("all_users");
-	json_object *jlist = json_object_new_array ();
-
-	json_object_object_add (jb, "type", jtype);
-	json_object_object_add (jb, "users", jlist);
+	SSL *ssl = (SSL *) atol (ptr);
 
 	if (num_fields > 0) {
 		for (int i = 0; i < num_fields; i++) {
 			MYSQL_ROW row = mysql_fetch_row (res);
-			json_object *item = json_object_new_object ();
+			json_object *jb = json_object_new_object ();
+			json_object *jtype = json_object_new_string ("status_online");
+			json_object_object_add (jb, "type", jtype);
+
 			json_object *jname = json_object_new_string (row[1]);
 			int status = get_status_by_name (row[1]);
 			json_object *jstatus = json_object_new_int (status);
-			json_object_object_add (item, "name", jname);
-			json_object_object_add (item, "status", jstatus);
-			json_object_array_add (jlist, item);
+			json_object_object_add (jb, "name", jname);
+			json_object_object_add (jb, "status", jstatus);
+			const char *data = json_object_to_json_string_ext (jb, JSON_C_TO_STRING_PRETTY);
+			SSL_write (ssl, data, strlen (data));
+			json_object_put (jb);
 		}
 		mysql_free_result (res);
-		return jb;
+		return;
 	}
 
 	mysql_free_result (res);
-	return jb;
+	return;
 }
 
 static char *get_name_from_id (const int id) {

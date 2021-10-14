@@ -162,7 +162,6 @@ static void *handler_clients_cb (void *data) {
 		for (int i = 0; i < nfds; i++) {
 			struct data_client *dc = events[i].data.ptr;
 			int size = SSL_read (dc->ssl, dt, DT_SIZE);
-			printf ("readed: %d\n", size);
 			if (size <= 0) {
 				char ptr[64];
 				snprintf (ptr, 64, "%lld", dc->ssl);
@@ -201,7 +200,6 @@ static void *handler_clients_cb (void *data) {
 				free (dc);
 				continue;
 			}
-			printf ("status: %d\n", ret);
 			switch (ret) {
 				case STATUS_REGISTER: 
 				case STATUS_LOGIN:
@@ -236,10 +234,7 @@ static void *handler_clients_cb (void *data) {
 					{
 						char ptr[64];
 						snprintf (ptr, 64, "%lld", dc->ssl);
-						json_object *jb = mysql_get_list_users (ptr);
-						const char *buffer = json_object_to_json_string_ext (jb, JSON_C_TO_STRING_PRETTY);
-						SSL_write (dc->ssl, buffer, strlen (buffer));
-						json_object_put (jb);
+						mysql_get_list_users (ptr);
 					}
 					break;
 				case STATUS_HANDSHAKE:

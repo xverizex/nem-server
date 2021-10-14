@@ -18,7 +18,7 @@ void set_to_online_table (const char *ssl_ptr, const int id);
 void unset_to_online_table (const char *ssl_ptr);
 int mysql_get_person_id (json_object *obj);
 void mysql_show_online_status (const int id, const int status);
-json_object *mysql_get_list_users (const char *ptr);
+void mysql_get_list_users (const char *ptr);
 json_object *mysql_get_list_online_users (const char *ptr);
 void mysql_show_online_status_ptr (const char *ptr, const int status);
 int mysql_login_server (json_object *j);

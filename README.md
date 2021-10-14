@@ -9,6 +9,9 @@
 7. [StatusOnline](#StatusOnline)
 8. [HandshakeKey](#HandshakeKey)
 9. [HandshakeNotice](#HandshakeNotice)
+10. [FileAdd](#FileAdd)
+11. [StorageFile](#StorageFile)
+12. [GetFile](#GetFile)
 
 ## <a name="Register"></a> Register
 ```
@@ -56,20 +59,12 @@ if a request is invalid, then a server answer:
 	"type": "get_list"
 }
 ```
-the server should send this.
+the server should send this of each user.
 ```
 {
-	"type": "all_users",
-	"users": [
-		{
-			"name": "laptop",
-			"status": 1
-		},
-		{
-			"name": "nemesis",
-			"status": 0
-		}
-	]
+	"type": "status_online",
+	"status", 1,
+	"name", "laptop"
 }
 ```
 ## <a name="Handshake"></a> Handshake
@@ -151,5 +146,61 @@ a server also can send this data:
 	"type": "handshake_notice",
 	"from": "laptop",
 	"status": 1
+}
+```
+## <a name="FileAdd"></a> FileAdd
+you should send this.
+if is_start is 0 then inserting a new file to the database.
+if is_start is 1 then concating new data.
+size of JSON packet, not more than 4096 bytes. I recommend a DATA field filling 16 * 80 bytes. CKEY and IVEC are RSA encrypted.
+```
+{
+	"type": "file_add",
+	"to": "laptop",
+	"filename: "test.txt",
+	"ckey": "fa0e0fjeaef...",
+	"ivec": "fase9fjasef9aef...",
+	"data": "fajse90fjaefafeahefahef",
+	"is_start": 0
+}
+```
+## <a name="StorageFile"></a> StorageFile
+you should send this data.
+```
+{
+	"type": "storage_files",
+	"from": "laptop"
+}
+```
+the answer will be it.
+```
+{
+	"type": "storage_files",
+	"from": "pcpc",
+	"filename": "test.png",
+	"ckey": "fa9fe09asefsjef...",
+	"ivec": "faefj0a9ejfae..."
+}
+```
+## <a name="GetFile"></a> GetFile
+send this.
+```
+{
+	"type": "get_file",
+	"from": "laptop",
+	"filename": "test.png"
+}
+```
+the answer will be it.
+```
+{
+	"type": "getting_file",
+	"from": "laptop",
+	"filename": "test.png",
+	"ckey": "faioefasfjeiaef0...",
+	"ivec": "faiojasefajsefj...",
+	"data": "aiofjaiojsefjioasoie",
+	"pos": 0,
+	"size": 13720
 }
 ```
