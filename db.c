@@ -169,7 +169,7 @@ void mysql_feed (const char *ptr) {
 }
 
 static void save_to_mysql (const char *our_name, const char *to_name, const char *data) {
-	int len = 1024 * 1024 * 31;
+	int len = 16384;
 	char *query = malloc (len);
 	int len_to_name = strlen (to_name);
 	int len_data = strlen (data);
