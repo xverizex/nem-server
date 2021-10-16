@@ -7,6 +7,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <openssl/ssl.h>
+#include <sys/stat.h>
 #include "db.h"
 
 static MYSQL *mysql;
@@ -215,7 +216,8 @@ static int mysql_add_file_to_table (const char *from,
 		const char *data,
 		const char *ckey,
 		const char *ivec,
-		const int is_start)
+		const int is_start,
+		const char *path_file)
 {
 	int len;
 	int ll;
@@ -265,8 +267,8 @@ static int mysql_add_file_to_table (const char *from,
 	ll = mysql_escape_string (civec, ivec, strlen (ivec));
 	civec[ll] = 0;
 	
-	char query[5000];
-	snprintf (query, 5000, "select * from storage where name_from = '%s' and name_to = '%s' and filename = '%s';",
+	char query[16384];
+	snprintf (query, 16384, "select * from storage where name_from = '%s' and name_to = '%s' and filename = '%s';",
 			from,
 			cto,
 			cfilename
@@ -280,25 +282,23 @@ static int mysql_add_file_to_table (const char *from,
 		ret = -1;
 		if (is_start) {
 			ret = 0;
-			snprintf (query, 5000, "update storage set data=concat(data,'%s') where name_from = '%s' and "
-					"name_to = '%s' and filename = '%s';",
-					cdata,
-					from,
-					cto,
-					cfilename
-				 );
-			mysql_query (mysql, query);
+			FILE *fp = fopen (path_file, "a");
+			fwrite (cdata, 1, strlen (cdata), fp);
+			fclose (fp);
 		}
 	} else {
-		snprintf (query, 5000, "insert into storage (name_from, name_to, filename, data, ckey, ivec) "
+		snprintf (query, 16384, "insert into storage (name_from, name_to, filename, data_path, ckey, ivec) "
 				"values ('%s', '%s', '%s', '%s', '%s', '%s');",
 				from,
 				cto,
 				cfilename,
-				cdata,
+				path_file,
 				cckey,
 				civec);
 		mysql_query (mysql, query);
+		FILE *fp = fopen (path_file, "w");
+		fwrite (cdata, 1, strlen (cdata), fp);
+		fclose (fp);
 		ret = 0;
 	}
 
@@ -347,8 +347,8 @@ static int mysql_get_list_files (const char *to,
 	ll = mysql_escape_string (cto, to, strlen (to));
 	cto[ll] = 0;
 	
-	char query[5000];
-	snprintf (query, 5000, "select * from storage where name_from = '%s' and name_to = '%s';",
+	char query[16384];
+	snprintf (query, 16384, "select * from storage where name_from = '%s' and name_to = '%s';",
 			from,
 			cto
 		 );
@@ -400,7 +400,6 @@ void mysql_storage_files (const char *ptr, const char *dt) {
 	json_object_put (jb);
 }
 void mysql_file_add (const char *ptr, const char *dt) {
-	printf ("mysql_file_add\n");
 	json_object *jb = json_tokener_parse (dt);
 	json_object *jto = json_object_object_get (jb, "to");
 	json_object *jdata = json_object_object_get (jb, "data");
@@ -417,9 +416,25 @@ void mysql_file_add (const char *ptr, const char *dt) {
 	const int is_start = json_object_get_int (jis_start);
 
 	char *our_name = get_our_name (ptr);
+	char *path_file = calloc (255, 1);
 
-	int res = mysql_add_file_to_table (our_name, to_name, filename, data, ckey, ivec, is_start);
+	if (strstr (to_name, "..")) goto end;
+	if (strstr (our_name, "..")) goto end;
+	if (strstr (filename, "..")) goto end;
 
+	snprintf (path_file, 255, "files");
+	mkdir (path_file, 0755);
+	snprintf (path_file, 255, "files/%s", our_name);
+	mkdir (path_file, 0755);
+	snprintf (path_file, 255, "files/%s/%s", our_name, to_name);
+	mkdir (path_file, 0755);
+	snprintf (path_file, 255, "files/%s/%s/%s", our_name, to_name, filename);
+
+
+	int res = mysql_add_file_to_table (our_name, to_name, filename, data, ckey, ivec, is_start, path_file);
+
+end:
+	free (path_file);
 	free (our_name);
 	json_object_put (jb);
 }
@@ -433,6 +448,9 @@ struct dtf {
 	char *ivec;
 	size_t pos;
 	size_t size;
+	int *is_closed;
+	int *is_send_file;
+	char *dt;
 };
 
 static void build_and_send_json_file (struct dtf *dtf, int size) {
@@ -451,36 +469,43 @@ static void build_and_send_json_file (struct dtf *dtf, int size) {
 	json_object_object_add (jb, "size", jsize);
 	json_object_object_add (jb, "ckey", jckey);
 	json_object_object_add (jb, "ivec", jivec);
-	char *data = malloc (size + 1);
-	if ((dtf->pos + size) > dtf->size) {
-		size = size - (dtf->pos + size - dtf->size);
-	}
-	strncpy (data, &dtf->data[dtf->pos], size);
-	data[size] = 0;
-	json_object *jdata = json_object_new_string (data);
+	json_object *jdata = json_object_new_string (dtf->dt);
 	json_object_object_add (jb, "data", jdata);
 
 	const char *dt = json_object_to_json_string_ext (jb, JSON_C_TO_STRING_PRETTY);
 	SSL_write (dtf->ssl, dt, strlen (dt));
 	json_object_put (jb);
-	free (data);
 }
 
 static void *process_sending_file (void *data) {
 	struct dtf *dtf = (struct dtf *) data;
 
+	struct stat st;
+	stat (dtf->data, &st);
+	dtf->size = st.st_size;
+	FILE *fp = fopen (dtf->data, "r");
 	while (dtf->pos < dtf->size) {
-		build_and_send_json_file (dtf, 16 * 160);
-		dtf->pos += 16 * 160;
+		if (*(dtf->is_closed) == 1) break;
+		int size = fread (dtf->dt, 1, 16 * 900, fp);
+		if (size <= 0) break;
+		build_and_send_json_file (dtf, size);
+		dtf->pos += size;
 	}
+	fclose (fp);
+	*(dtf->is_send_file) = 0;
 	free (dtf->data);
 	free (dtf->filename);
 	free (dtf->from);
+	free (dtf->dt);
+	if (*(dtf->is_closed)) {
+		free (dtf->is_closed);
+		free (dtf->is_send_file);
+	}
 	free (dtf);
 	return NULL;
 }
 
-void mysql_get_file (const char *ptr, const char *dt) {
+void mysql_get_file (const char *ptr, const char *dt, int *is_closed, int *is_send_file) {
 	json_object *jb = json_tokener_parse (dt);
 	json_object *jfrom = json_object_object_get (jb, "from");
 	json_object *jfilename = json_object_object_get (jb, "filename");
@@ -503,8 +528,8 @@ void mysql_get_file (const char *ptr, const char *dt) {
 	ll = mysql_escape_string (cfilename, filename, strlen (filename));
 	cfilename[ll] = 0;
 	
-	char query[5000];
-	snprintf (query, 5000, "select data,ckey,ivec from storage where name_from = '%s' and name_to = '%s' and filename = '%s';",
+	char query[16384];
+	snprintf (query, 16384, "select data_path,ckey,ivec from storage where name_from = '%s' and name_to = '%s' and filename = '%s';",
 			cfrom,
 			our_name,
 			cfilename
@@ -516,6 +541,7 @@ void mysql_get_file (const char *ptr, const char *dt) {
 	if (num_fields) {
 		MYSQL_ROW row = mysql_fetch_row (res);
 		struct dtf *dtf = calloc (1, sizeof (struct dtf));
+		dtf->dt = calloc (16 * 900 + 1, 1);
 		dtf->ssl = ssl;
 		dtf->pos = 0L;
 		dtf->size = strlen (row[0]);
@@ -524,6 +550,9 @@ void mysql_get_file (const char *ptr, const char *dt) {
 		dtf->from = strdup (cfrom);
 		dtf->ckey = strdup (row[1]);
 		dtf->ivec = strdup (row[2]);
+		dtf->is_closed = is_closed;
+		dtf->is_send_file = is_send_file;
+		*(dtf->is_send_file) = 1;
 		pthread_t t;
 		pthread_create (&t, NULL, process_sending_file, dtf);
 	}

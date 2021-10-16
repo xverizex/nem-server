@@ -19,7 +19,7 @@
 
 #define EPOLL_SIZE         1024
 #define FOREVER            1
-#define DT_SIZE            4096
+#define DT_SIZE            30000
 
 static int ep;
 static struct epoll_event ev, events[EPOLL_SIZE];
@@ -30,6 +30,8 @@ struct data_client {
 	SSL *ssl;
 	SSL_CTX *ctx;
 	int client;
+	int *is_closed;
+	int *is_send_files;
 };
 
 static int parse (char *dt, int *id) {
@@ -163,6 +165,8 @@ static void *handler_clients_cb (void *data) {
 			struct data_client *dc = events[i].data.ptr;
 			int size = SSL_read (dc->ssl, dt, DT_SIZE);
 			if (size <= 0) {
+				printf ("closing\n");
+				*(dc->is_closed) = 1;
 				char ptr[64];
 				snprintf (ptr, 64, "%lld", dc->ssl);
 				mysql_show_online_status_ptr (ptr, 0);
@@ -173,6 +177,10 @@ static void *handler_clients_cb (void *data) {
 					perror ("epoll_ctl del client");
 				}
 				close (dc->client);
+				if (*(dc->is_send_files) == 0) {
+					free (dc->is_closed);
+					free (dc->is_send_files);
+				}
 				free (dc);
 				continue;
 			}
@@ -191,12 +199,17 @@ static void *handler_clients_cb (void *data) {
 					mysql_show_online_status_ptr (ptr, 0);
 					unset_to_online_table (ptr);
 				}
+				*(dc->is_closed) = 1;
 				SSL_free (dc->ssl);
 				int ret = epoll_ctl (ep, EPOLL_CTL_DEL, dc->client, &ev);
 				if (ret == -1) {
 					perror ("epoll_ctl del client");
 				}
 				close (dc->client);
+				if (*(dc->is_send_files) == 0) {
+					free (dc->is_closed);
+					free (dc->is_send_files);
+				}
 				free (dc);
 				continue;
 			}
@@ -279,7 +292,7 @@ static void *handler_clients_cb (void *data) {
 					{
 						char ptr[64];
 						snprintf (ptr, 64, "%lld", dc->ssl);
-						mysql_get_file (ptr, dt);
+						mysql_get_file (ptr, dt, dc->is_closed, dc->is_send_files);
 					}
 					break;
 			}
@@ -369,8 +382,11 @@ static void loop_handler (const int sock) {
 			close (client);
 			continue;
 		}
+		dc->is_closed = calloc (1, sizeof (int));
+		dc->is_send_files = calloc (1, sizeof (int));
 		dc->ctx = ctx;
 		dc->client = client;
+		*(dc->is_closed) = 0;
 		fd_set rfds;
 		struct timeval tv;
 		int retval;

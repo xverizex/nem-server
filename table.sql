@@ -37,5 +37,5 @@ create table if not exists storage (
 	name_from char(16) not null,
 	name_to char(16) not null,
 	filename char(255) not null,
-	data LONGTEXT not null
+	data_path char(255) not null
 	)

@@ -32,4 +32,4 @@ void mysql_file_add (const char *ptr, const char *dt);
 int mysql_check_storage_files (json_object *j);
 void mysql_storage_files (const char *ptr, const char *dt);
 int mysql_check_get_file (json_object *j);
-void mysql_get_file (const char *ptr, const char *dt);
+void mysql_get_file (const char *ptr, const char *dt, int *is_closed, int *is_send_files);
