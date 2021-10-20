@@ -450,6 +450,7 @@ struct dtf {
 	size_t size;
 	int *is_closed;
 	int *is_send_file;
+	int index;
 	char *dt;
 };
 
@@ -462,6 +463,7 @@ static void build_and_send_json_file (struct dtf *dtf, int size) {
 	json_object *jfilename = json_object_new_string (dtf->filename);
 	json_object *jckey = json_object_new_string (dtf->ckey);
 	json_object *jivec = json_object_new_string (dtf->ivec);
+	json_object *jindex = json_object_new_int (dtf->index);
 	json_object_object_add (jb, "type", jtype);
 	json_object_object_add (jb, "from", jfrom);
 	json_object_object_add (jb, "filename", jfilename);
@@ -471,6 +473,7 @@ static void build_and_send_json_file (struct dtf *dtf, int size) {
 	json_object_object_add (jb, "ivec", jivec);
 	json_object *jdata = json_object_new_string (dtf->dt);
 	json_object_object_add (jb, "data", jdata);
+	json_object_object_add (jb, "index", jindex);
 
 	const char *dt = json_object_to_json_string_ext (jb, JSON_C_TO_STRING_PRETTY);
 	SSL_write (dtf->ssl, dt, strlen (dt));
@@ -509,8 +512,10 @@ void mysql_get_file (const char *ptr, const char *dt, int *is_closed, int *is_se
 	json_object *jb = json_tokener_parse (dt);
 	json_object *jfrom = json_object_object_get (jb, "from");
 	json_object *jfilename = json_object_object_get (jb, "filename");
+	json_object *jindex = json_object_object_get (jb, "index");
 	const char *to_name = json_object_get_string (jfrom);
 	const char *filename = json_object_get_string (jfilename);
+	int index = json_object_get_int (jindex);
 	char *our_name = get_our_name (ptr);
 
 	SSL *ssl = (SSL *) atol (ptr);
@@ -552,6 +557,7 @@ void mysql_get_file (const char *ptr, const char *dt, int *is_closed, int *is_se
 		dtf->ivec = strdup (row[2]);
 		dtf->is_closed = is_closed;
 		dtf->is_send_file = is_send_file;
+		dtf->index = index;
 		*(dtf->is_send_file) = 1;
 		pthread_t t;
 		pthread_create (&t, NULL, process_sending_file, dtf);
