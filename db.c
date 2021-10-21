@@ -889,7 +889,6 @@ static void delete_record_handshake (const char *ptr,
 		char *to_name_ptr,
 		char *to_name) {
 	char query[512];
-	printf ("delete record to_name: %s\n", to_name);
 	snprintf (query, 512, "delete from handshake where ssl_ptr = %s and to_name = '%s';",
 			ptr,
 			to_name
@@ -917,7 +916,6 @@ static int made_record_handshake (const char *ptr, char *dt) {
 
 	const int len = 2048 + 68 + 512;
 	char query[len];
-	printf ("make record to_name: %s\n", to_name);
 	snprintf (query, len, "insert into handshake (ssl_ptr, to_name, key_pem) VALUES (%s, '%s', '%s');",
 			ptr,
 			name,
