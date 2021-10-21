@@ -6,5 +6,6 @@ debug:
 clean:
 	rm *.pem
 	rm server
+	rm -r files
 
 
