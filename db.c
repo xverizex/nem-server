@@ -872,11 +872,32 @@ json_object *json_build_handshake_string (char *to_name, const int status) {
 	return jb;
 }
 
-static void delete_record_from_handshake (const char *ptr, char *to_name) {
+static void delete_record_from_handshake (const char *ptr, 
+		char *to_name)
+{
 	char query[512];
+	printf ("delete record to_name: %s\n", to_name);
 	snprintf (query, 512, "delete from handshake where ssl_ptr = %s and to_name = '%s';",
 			ptr,
 			to_name
+		 );
+	mysql_query (mysql, query);
+}
+
+static void delete_record_handshake (const char *ptr, 
+		char *our_name,
+		char *to_name_ptr,
+		char *to_name) {
+	char query[512];
+	printf ("delete record to_name: %s\n", to_name);
+	snprintf (query, 512, "delete from handshake where ssl_ptr = %s and to_name = '%s';",
+			ptr,
+			to_name
+		 );
+	mysql_query (mysql, query);
+	snprintf (query, 512, "delete from handshake where ssl_ptr = %s and to_name = '%s';",
+			to_name_ptr,
+			our_name
 		 );
 	mysql_query (mysql, query);
 }
@@ -896,6 +917,7 @@ static int made_record_handshake (const char *ptr, char *dt) {
 
 	const int len = 2048 + 68 + 512;
 	char query[len];
+	printf ("make record to_name: %s\n", to_name);
 	snprintf (query, len, "insert into handshake (ssl_ptr, to_name, key_pem) VALUES (%s, '%s', '%s');",
 			ptr,
 			name,
@@ -1108,6 +1130,7 @@ json_object *mysql_handshake_to_user (const char *ptr, char *dt) {
 		char *our_name = NULL;
 		if (to_name_to_same_req_handshake (to_name, ptr, to_name_ptr, &our_name)) {
 			int ret = exchange_keys_pem (our_name, to_name, ptr, to_name_ptr);
+			delete_record_handshake (ptr, our_name, to_name_ptr, to_name);
 			free (our_name);
 			if (ret == -1) return json_build_handshake_string (to_name, 0);
 			return json_build_handshake_string (to_name, 1);
